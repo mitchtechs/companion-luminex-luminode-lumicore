@@ -1,0 +1,32 @@
+{
+	"$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
+	"id": "luminex-luminode-lumicore",
+	"name": "luminex-luminode-lumicore",
+	"shortname": "LumiNode",
+	"description": "Control Luminex LumiNode and LumiCore network DMX devices via REST API and WebSocket.",
+	"version": "1.0.0",
+	"license": "MIT",
+	"repository": "git+https://github.com/bitfocus/companion-module-luminex-luminode-lumicore.git",
+	"bugs": "https://github.com/bitfocus/companion-module-luminex-luminode-lumicore/issues",
+	"maintainers": [
+		{
+			"name": "Mitch Bailey"
+		}
+	],
+	"runtime": {
+		"type": "node22",
+		"api": "nodejs-ipc",
+		"apiVersion": "0.0.0",
+		"entrypoint": "../dist/main.js"
+	},
+	"legacyIds": [],
+	"manufacturer": "Luminex",
+	"products": ["LumiNode", "LumiCore"],
+	"keywords": ["Lighting", "DMX", "Art-Net", "sACN", "Luminex", "LumiNode", "LumiCore"],
+	"bonjourQueries": {
+		"luminode_host": {
+			"type": "luminex",
+			"protocol": "tcp"
+		}
+	}
+}
