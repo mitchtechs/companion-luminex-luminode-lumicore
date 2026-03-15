@@ -43,6 +43,8 @@ export function UpdateVariableDefinitions(self: ModuleInstance): void {
 			{ variableId: `processblock_${i}_color_1`, name: `Process Engine ${i} Color 1` },
 			{ variableId: `processblock_${i}_color_2`, name: `Process Engine ${i} Color 2` },
 			{ variableId: `processblock_${i}_mode`, name: `Process Engine ${i} Mode` },
+			{ variableId: `processblock_${i}_active_input`, name: `Process Engine ${i} Active Input` },
+			{ variableId: `processblock_${i}_sources`, name: `Process Engine ${i} Available Sources` },
 		)
 	}
 

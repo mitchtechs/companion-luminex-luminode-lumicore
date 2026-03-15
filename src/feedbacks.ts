@@ -7,6 +7,7 @@ export enum FeedbackId {
 	NextCue = 'next_cue',
 	ActiveProfile = 'active_profile',
 	ProcessBlockMode = 'processblock_mode',
+	ActiveInput = 'active_input',
 	DeviceConnected = 'device_connected',
 }
 
@@ -115,6 +116,40 @@ export function UpdateFeedbacks(self: ModuleInstance): void {
 				const pbIdx = Number(feedback.options.processblock) - 1
 				const pb = api?.processblocks.find((p) => p.id === pbIdx)
 				return pb?.mode === feedback.options.mode
+			},
+		},
+
+		[FeedbackId.ActiveInput]: {
+			type: 'boolean',
+			name: 'Active Input Source',
+			description: 'Change style when a specific input source is active on a process engine',
+			defaultStyle: {
+				bgcolor: Color.Green,
+				color: Color.White,
+			},
+			options: [
+				{
+					type: 'number',
+					id: 'processblock',
+					label: 'Process Engine',
+					tooltip: 'Process engine number (1-based)',
+					default: 1,
+					min: 1,
+					max: 16,
+				},
+				{
+					type: 'textinput',
+					id: 'source_name',
+					label: 'Source Name',
+					tooltip: 'Name of the input source to match (e.g. Art-Net, sACN, DMX Port 1)',
+					default: '',
+					useVariables: true,
+				},
+			],
+			callback: (feedback) => {
+				const pbIdx = Number(feedback.options.processblock) - 1
+				const activeSource = api?.activeInputs.get(pbIdx)
+				return activeSource === feedback.options.source_name
 			},
 		},
 

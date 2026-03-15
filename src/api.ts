@@ -2,7 +2,7 @@ import { InstanceStatus, type CompanionVariableValues } from '@companion-module/
 import type { ModuleInstance } from './main.js'
 import { LuminexWebSocket } from './websocket.js'
 import { FeedbackId } from './feedbacks.js'
-import type { DeviceInfo, ProcessBlock, Profile, WsMessage, ApiState } from './types.js'
+import type { DeviceInfo, ProcessBlock, ProcessBlockSource, ProcessBlockDebug, Profile, WsMessage, ApiState } from './types.js'
 
 export class LuminexAPI {
 	private instance: ModuleInstance
@@ -21,6 +21,8 @@ export class LuminexAPI {
 	activeProfile?: string
 	profiles: Profile[] = []
 	processblocks: ProcessBlock[] = []
+	processblockSources: Map<number, ProcessBlockSource[]> = new Map()
+	activeInputs: Map<number, string> = new Map()
 	deviceInfo?: DeviceInfo
 	firmwareVersion?: string
 
@@ -134,11 +136,14 @@ export class LuminexAPI {
 		}
 		this.fetchPlayInfo()
 
+		this.fetchProcessBlockInputs()
+
 		this.pollTimer = setInterval(() => {
 			if (!this.useWebSockets) {
 				this.fetchDeviceInfo()
 			}
 			this.fetchPlayInfo()
+			this.fetchProcessBlockInputs()
 		}, interval)
 
 		if (!this.useWebSockets) {
@@ -225,6 +230,24 @@ export class LuminexAPI {
 	private async fetchProcessBlocks(): Promise<void> {
 		const data = await this.fetchJSON<ProcessBlock[]>('processblock')
 		if (data) this.processProcessBlocks(data)
+	}
+
+	private async fetchProcessBlockInputs(): Promise<void> {
+		const numPB = this.deviceInfo?.nr_processblocks ?? 0
+		for (let i = 0; i < numPB; i++) {
+			const [sources, debug] = await Promise.all([
+				this.fetchJSON<ProcessBlockSource[]>(`pipeline/processblock/${i}/sources`),
+				this.fetchJSON<ProcessBlockDebug>(`pipeline/processblock/${i}/debug`),
+			])
+
+			if (sources) {
+				this.processblockSources.set(i, sources)
+			}
+
+			if (debug && sources) {
+				this.processActiveInput(i, sources, debug)
+			}
+		}
 	}
 
 	private async fetchPlayInfo(): Promise<void> {
@@ -343,6 +366,30 @@ export class LuminexAPI {
 		this.processblocks[id] = pb
 		this.instance.setVariableValues(vars)
 		this.instance.checkFeedbacks(FeedbackId.ProcessBlockMode)
+	}
+
+	private processActiveInput(pbIdx: number, sources: ProcessBlockSource[], debug: ProcessBlockDebug): void {
+		const displayId = pbIdx + 1
+		// active_input is an array of source IDs per channel - use the first channel as the representative
+		const activeSourceId = debug.active_input?.[0]
+		const activeSource = activeSourceId !== undefined ? sources.find((s) => s.id === activeSourceId) : undefined
+		const activeName = activeSource?.name ?? (activeSourceId !== undefined ? `Source ${activeSourceId}` : 'None')
+
+		const previousName = this.activeInputs.get(pbIdx)
+		if (previousName !== activeName) {
+			this.activeInputs.set(pbIdx, activeName)
+			this.instance.setVariableValues({
+				[`processblock_${displayId}_active_input`]: activeName,
+			})
+
+			// Also store available sources as a comma-separated list
+			const sourceNames = sources.map((s) => s.name).join(', ')
+			this.instance.setVariableValues({
+				[`processblock_${displayId}_sources`]: sourceNames,
+			})
+
+			this.instance.checkFeedbacks(FeedbackId.ActiveInput)
+		}
 	}
 
 	// --- Helpers ---

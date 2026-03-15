@@ -414,6 +414,27 @@ export function UpdatePresets(self: ModuleInstance): void {
 			feedbacks: [],
 		}
 
+		// Active input display preset
+		presets[`processblock_${pb}_active_input`] = {
+			type: 'button',
+			category: 'Process Engines',
+			name: `Process Engine ${pb} Active Input`,
+			style: {
+				text: `PE${pb} Input\\n$(${label}:processblock_${pb}_active_input)`,
+				size: 'auto',
+				color: Color.LightGreen,
+				bgcolor: Color.Black,
+			},
+			steps: [{ down: [], up: [] }],
+			feedbacks: [
+				{
+					feedbackId: FeedbackId.ProcessBlockMode,
+					options: { processblock: pb, mode: 'Switch' },
+					style: { bgcolor: Color.DarkGreen },
+				},
+			],
+		}
+
 		// Mode switching presets
 		for (const mode of modes) {
 			presets[`processblock_${pb}_mode_${mode.toLowerCase()}`] = {

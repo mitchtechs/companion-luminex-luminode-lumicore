@@ -44,6 +44,16 @@ export interface WsMessage {
 	value: any
 }
 
+export interface ProcessBlockSource {
+	id: number
+	name: string
+	type: string
+}
+
+export interface ProcessBlockDebug {
+	active_input: number[]
+}
+
 export interface ApiState {
 	deviceinfo?: DeviceInfo
 	active_profile_name?: { name: string }
