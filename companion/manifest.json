@@ -10,8 +10,7 @@
     "bugs": "https://github.com/bitfocus/companion-module-luminex-luminode-lumicore/issues",
     "maintainers": [
         {
-            "name": "Mitch Bailey",
-            "company": "PDA Technical Limited"
+            "name": "Mitch Bailey"
         }
     ],
     "runtime": {
