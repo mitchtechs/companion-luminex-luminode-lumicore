@@ -5,12 +5,6 @@ import { FeedbackId } from './feedbacks.js'
 import * as Color from './colors.js'
 
 export function UpdatePresets(self: ModuleInstance): void {
-	// Don't register presets if no API connection — avoids warnings about missing actions
-	if (!self.api) {
-		self.setPresetDefinitions({})
-		return
-	}
-
 	const presets: CompanionPresetDefinitions = {}
 	const label = self.label
 
@@ -138,6 +132,26 @@ export function UpdatePresets(self: ModuleInstance): void {
 		},
 		steps: [{ down: [], up: [] }],
 		feedbacks: [],
+	}
+
+	presets['connection_status'] = {
+		type: 'button',
+		category: 'Device',
+		name: 'Connection Status',
+		style: {
+			text: `$(${label}:short_name)\\nOFFLINE`,
+			size: 'auto',
+			color: Color.White,
+			bgcolor: Color.Red,
+		},
+		steps: [{ down: [{ actionId: ActionId.Identify, options: {} }], up: [] }],
+		feedbacks: [
+			{
+				feedbackId: FeedbackId.DeviceConnected,
+				options: {},
+				style: { text: `$(${label}:short_name)\\nONLINE`, bgcolor: Color.DarkGreen, color: Color.White },
+			},
+		],
 	}
 
 	// ──────────────── Playback ────────────────
@@ -357,7 +371,7 @@ export function UpdatePresets(self: ModuleInstance): void {
 		feedbacks: [],
 	}
 
-	// Per-port DMX presets (up to 12 ports)
+	// Per-port DMX presets (use device info if available, otherwise default to 12)
 	const maxPorts = self.api?.deviceInfo?.nr_dmx_ports ?? 12
 	for (let port = 1; port <= maxPorts; port++) {
 		presets[`dmx_ack_port_${port}`] = {
@@ -401,6 +415,7 @@ export function UpdatePresets(self: ModuleInstance): void {
 
 	// ──────────────── Process Engines ────────────────
 
+	// Process engines (use device info if available, otherwise default to 8)
 	const numPB = self.api?.deviceInfo?.nr_processblocks ?? 8
 	const modes = ['HTP', 'LTP', 'Crossfade', 'Backup', 'Switch']
 
