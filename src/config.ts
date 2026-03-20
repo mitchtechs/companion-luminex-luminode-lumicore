@@ -9,6 +9,23 @@ export interface ModuleConfig {
 
 export function GetConfigFields(): SomeCompanionConfigField[] {
 	return [
+		// ── Compatibility Notice ──────────────────────────────────────────────
+		{
+			type: 'static-text',
+			id: 'compat-notice',
+			width: 12,
+			label: 'Hardware Compatibility',
+			value: `
+				<strong>Supported devices:</strong> Luminex LumiNode and LumiCore — all variants.<br>
+				<strong>Firmware requirements:</strong> v2.4.0 or later recommended. v2.7.0 or later required for
+				WebSocket support (real-time updates). Older firmware falls back to HTTP polling automatically.<br>
+				<strong>Auto-discovery:</strong> If your device appears in the dropdown below, select it for
+				automatic connection. Otherwise enter the IP address manually. Discovery requires the device
+				and this computer to be on the same network with mDNS/Bonjour enabled.
+			`.replace(/\t/g, '').trim(),
+		},
+
+		// ── Auto-discovery ────────────────────────────────────────────────────
 		{
 			type: 'bonjour-device',
 			id: 'luminode_host',
