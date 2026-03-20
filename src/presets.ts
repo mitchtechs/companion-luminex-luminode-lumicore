@@ -4,6 +4,15 @@ import { ActionId } from './actions.js'
 import { FeedbackId } from './feedbacks.js'
 import * as Color from './colors.js'
 
+/** Map process engine mode name → background colour */
+const MODE_COLORS: Record<string, number> = {
+	HTP: Color.ModeHTP,
+	LTP: Color.ModeLTP,
+	Crossfade: Color.ModeCrossfade,
+	Backup: Color.ModeBackup,
+	Switch: Color.ModeSwitch,
+}
+
 export function UpdatePresets(self: ModuleInstance): void {
 	const presets: CompanionPresetDefinitions = {}
 	const label = self.label
@@ -15,10 +24,10 @@ export function UpdatePresets(self: ModuleInstance): void {
 		category: 'Device',
 		name: 'Identify Device',
 		style: {
-			text: 'Identify',
+			text: '💡 Identify',
 			size: 'auto',
 			color: Color.White,
-			bgcolor: Color.Blue,
+			bgcolor: Color.DeviceBg,
 		},
 		steps: [{ down: [{ actionId: ActionId.Identify, options: {} }], up: [] }],
 		feedbacks: [],
@@ -29,10 +38,10 @@ export function UpdatePresets(self: ModuleInstance): void {
 		category: 'Device',
 		name: 'Reboot Device',
 		style: {
-			text: `Reboot\\n$(${label}:short_name)`,
+			text: `⚠️ Reboot\\n$(${label}:short_name)`,
 			size: 'auto',
 			color: Color.White,
-			bgcolor: Color.DarkGrey,
+			bgcolor: Color.DeviceBg,
 		},
 		steps: [{ down: [{ actionId: ActionId.Reboot, options: {} }], up: [] }],
 		feedbacks: [],
@@ -43,7 +52,7 @@ export function UpdatePresets(self: ModuleInstance): void {
 		category: 'Device',
 		name: 'Factory Reset (Keep IP & Profiles)',
 		style: {
-			text: `Reset\\n$(${label}:short_name)`,
+			text: `🏭 Reset\\n$(${label}:short_name)`,
 			size: 'auto',
 			color: Color.White,
 			bgcolor: Color.Red,
@@ -67,7 +76,7 @@ export function UpdatePresets(self: ModuleInstance): void {
 		category: 'Device',
 		name: 'Display On',
 		style: {
-			text: 'Display\\nON',
+			text: '📺 Display\\nON',
 			size: 'auto',
 			color: Color.White,
 			bgcolor: Color.DarkGreen,
@@ -86,10 +95,10 @@ export function UpdatePresets(self: ModuleInstance): void {
 		category: 'Device',
 		name: 'Display Off',
 		style: {
-			text: 'Display\\nOFF',
+			text: '📺 Display\\nOFF',
 			size: 'auto',
 			color: Color.White,
-			bgcolor: Color.DarkGrey,
+			bgcolor: Color.DeviceBg,
 		},
 		steps: [
 			{
@@ -105,7 +114,7 @@ export function UpdatePresets(self: ModuleInstance): void {
 		category: 'Device',
 		name: 'Device Info',
 		style: {
-			text: `$(${label}:short_name)\\n$(${label}:device_type)`,
+			text: `$(${label}:short_name)\\n$(${label}:device_type)\\nDevice Info`,
 			size: 'auto',
 			color: Color.White,
 			bgcolor: Color.Black,
@@ -125,7 +134,7 @@ export function UpdatePresets(self: ModuleInstance): void {
 		category: 'Device',
 		name: 'Firmware Version',
 		style: {
-			text: `FW\\n$(${label}:current_version)`,
+			text: `FW\\n$(${label}:current_version)\\nFirmware`,
 			size: 'auto',
 			color: Color.LightGreen,
 			bgcolor: Color.Black,
@@ -161,10 +170,10 @@ export function UpdatePresets(self: ModuleInstance): void {
 		category: 'Playback',
 		name: 'Go (Play Next Cue)',
 		style: {
-			text: 'GO',
+			text: '▶️ GO',
 			size: 'auto',
-			color: Color.Black,
-			bgcolor: Color.Green,
+			color: Color.White,
+			bgcolor: Color.PlaybackBg,
 		},
 		steps: [{ down: [{ actionId: ActionId.PlayGo, options: {} }], up: [] }],
 		feedbacks: [],
@@ -175,10 +184,10 @@ export function UpdatePresets(self: ModuleInstance): void {
 		category: 'Playback',
 		name: 'Back',
 		style: {
-			text: 'BACK',
+			text: '⏮ BACK',
 			size: 'auto',
-			color: Color.Yellow,
-			bgcolor: Color.Black,
+			color: Color.White,
+			bgcolor: Color.PlaybackBg,
 		},
 		steps: [{ down: [{ actionId: ActionId.PlayBack, options: {} }], up: [] }],
 		feedbacks: [],
@@ -189,10 +198,10 @@ export function UpdatePresets(self: ModuleInstance): void {
 		category: 'Playback',
 		name: 'Forward (Next)',
 		style: {
-			text: 'NEXT',
+			text: '⏭ NEXT',
 			size: 'auto',
-			color: Color.Yellow,
-			bgcolor: Color.Black,
+			color: Color.White,
+			bgcolor: Color.PlaybackBg,
 		},
 		steps: [{ down: [{ actionId: ActionId.PlayForward, options: {} }], up: [] }],
 		feedbacks: [],
@@ -203,10 +212,10 @@ export function UpdatePresets(self: ModuleInstance): void {
 		category: 'Playback',
 		name: 'Reset Player',
 		style: {
-			text: 'RESET',
+			text: '⏹ RESET',
 			size: 'auto',
-			color: Color.Orange,
-			bgcolor: Color.Black,
+			color: Color.White,
+			bgcolor: Color.PlaybackBg,
 		},
 		steps: [{ down: [{ actionId: ActionId.PlayReset, options: {} }], up: [] }],
 		feedbacks: [],
@@ -217,10 +226,10 @@ export function UpdatePresets(self: ModuleInstance): void {
 		category: 'Playback',
 		name: 'Current Snapshot Display',
 		style: {
-			text: `Playing\\n$(${label}:current_snapshot)`,
+			text: `📸 Playing\\n$(${label}:current_snapshot)`,
 			size: 'auto',
 			color: Color.White,
-			bgcolor: Color.DarkGrey,
+			bgcolor: Color.PlaybackBg,
 		},
 		steps: [{ down: [], up: [] }],
 		feedbacks: [],
@@ -231,10 +240,10 @@ export function UpdatePresets(self: ModuleInstance): void {
 		category: 'Playback',
 		name: 'Next Snapshot Display',
 		style: {
-			text: `Next\\n$(${label}:next_snapshot)`,
+			text: `📸 Next\\n$(${label}:next_snapshot)`,
 			size: 'auto',
 			color: Color.Yellow,
-			bgcolor: Color.DarkGrey,
+			bgcolor: Color.PlaybackBg,
 		},
 		steps: [{ down: [], up: [] }],
 		feedbacks: [],
@@ -248,10 +257,10 @@ export function UpdatePresets(self: ModuleInstance): void {
 			category: 'Playback',
 			name: `Play Snapshot ${snapshotId}`,
 			style: {
-				text: `Snap\\n${snapshotId}`,
+				text: `📸 Snap\\n${snapshotId}`,
 				size: 'auto',
-				color: Color.Green,
-				bgcolor: Color.Black,
+				color: Color.White,
+				bgcolor: Color.PlaybackBg,
 			},
 			steps: [
 				{
@@ -281,10 +290,10 @@ export function UpdatePresets(self: ModuleInstance): void {
 		category: 'Profiles',
 		name: 'Active Profile Name',
 		style: {
-			text: `Profile\\n$(${label}:active_profile_name)`,
+			text: `📂 Profile\\n$(${label}:active_profile_name)`,
 			size: 'auto',
-			color: Color.LightGreen,
-			bgcolor: Color.Black,
+			color: Color.White,
+			bgcolor: Color.ProfileBg,
 		},
 		steps: [{ down: [], up: [] }],
 		feedbacks: [],
@@ -297,10 +306,10 @@ export function UpdatePresets(self: ModuleInstance): void {
 			category: 'Profiles',
 			name: `Recall Profile ${i}`,
 			style: {
-				text: `Recall\\n$(${label}:profile_${i}_name)`,
+				text: `📂 Recall\\n$(${label}:profile_${i}_name)\\nSlot ${i}`,
 				size: 'auto',
-				color: Color.LightBlue,
-				bgcolor: Color.Black,
+				color: Color.White,
+				bgcolor: Color.ProfileBg,
 			},
 			steps: [
 				{
@@ -321,10 +330,10 @@ export function UpdatePresets(self: ModuleInstance): void {
 			category: 'Profiles',
 			name: `Save to Profile ${i}`,
 			style: {
-				text: `Save\\nP${i}`,
+				text: `💾 Save\\nSlot ${i}`,
 				size: 'auto',
-				color: Color.Yellow,
-				bgcolor: Color.Black,
+				color: Color.White,
+				bgcolor: Color.ProfileBg,
 			},
 			steps: [
 				{
@@ -348,10 +357,10 @@ export function UpdatePresets(self: ModuleInstance): void {
 		category: 'DMX',
 		name: 'Acknowledge All Stream Loss',
 		style: {
-			text: 'ACK All\\nStream Loss',
+			text: '🌊 ACK All\\nStream Loss',
 			size: 'auto',
 			color: Color.White,
-			bgcolor: Color.Orange,
+			bgcolor: Color.DmxBg,
 		},
 		steps: [{ down: [{ actionId: ActionId.DmxAcknowledgeAll, options: {} }], up: [] }],
 		feedbacks: [],
@@ -362,10 +371,10 @@ export function UpdatePresets(self: ModuleInstance): void {
 		category: 'DMX',
 		name: 'Force RDM Discovery All',
 		style: {
-			text: 'RDM\\nDiscover All',
+			text: '🔍 RDM\\nDiscover All',
 			size: 'auto',
 			color: Color.White,
-			bgcolor: Color.Purple,
+			bgcolor: Color.DmxBg,
 		},
 		steps: [{ down: [{ actionId: ActionId.RdmDiscoveryAll, options: {} }], up: [] }],
 		feedbacks: [],
@@ -379,10 +388,10 @@ export function UpdatePresets(self: ModuleInstance): void {
 			category: 'DMX',
 			name: `Acknowledge Stream Loss Port ${port}`,
 			style: {
-				text: `ACK\\nPort ${port}`,
+				text: `🌊 ACK\\nPort ${port}`,
 				size: 'auto',
 				color: Color.White,
-				bgcolor: Color.DarkGrey,
+				bgcolor: Color.DmxBg,
 			},
 			steps: [
 				{
@@ -398,10 +407,10 @@ export function UpdatePresets(self: ModuleInstance): void {
 			category: 'DMX',
 			name: `Force RDM Discovery Port ${port}`,
 			style: {
-				text: `RDM\\nPort ${port}`,
+				text: `🔍 RDM\\nPort ${port}`,
 				size: 'auto',
 				color: Color.White,
-				bgcolor: Color.DarkGrey,
+				bgcolor: Color.DmxBg,
 			},
 			steps: [
 				{
@@ -426,7 +435,7 @@ export function UpdatePresets(self: ModuleInstance): void {
 			category: 'Process Engines',
 			name: `Process Engine ${pb} Info`,
 			style: {
-				text: `PE${pb}\\n$(${label}:processblock_${pb}_name)\\n$(${label}:processblock_${pb}_mode)`,
+				text: `🔄 PE${pb}\\n$(${label}:processblock_${pb}_name)\\n$(${label}:processblock_${pb}_mode)`,
 				size: 'auto',
 				color: Color.White,
 				bgcolor: Color.DarkGrey,
@@ -441,7 +450,7 @@ export function UpdatePresets(self: ModuleInstance): void {
 			category: 'Process Engines',
 			name: `Process Engine ${pb} Active Input`,
 			style: {
-				text: `PE${pb} Input\\n$(${label}:processblock_${pb}_active_input)`,
+				text: `🔄 PE${pb} Input\\n$(${label}:processblock_${pb}_active_input)`,
 				size: 'auto',
 				color: Color.LightGreen,
 				bgcolor: Color.Black,
@@ -458,15 +467,16 @@ export function UpdatePresets(self: ModuleInstance): void {
 
 		// Mode switching presets
 		for (const mode of modes) {
+			const modeBg = MODE_COLORS[mode] ?? Color.DarkGrey
 			presets[`processblock_${pb}_mode_${mode.toLowerCase()}`] = {
 				type: 'button',
 				category: 'Process Engines',
 				name: `PE ${pb}: Set ${mode}`,
 				style: {
-					text: `PE${pb}\\n${mode}`,
+					text: `🔄 PE${pb}\\n${mode}`,
 					size: 'auto',
 					color: Color.White,
-					bgcolor: Color.DarkGrey,
+					bgcolor: modeBg,
 				},
 				steps: [
 					{
@@ -483,7 +493,7 @@ export function UpdatePresets(self: ModuleInstance): void {
 					{
 						feedbackId: FeedbackId.ProcessBlockMode,
 						options: { processblock: pb, mode },
-						style: { bgcolor: Color.Blue, color: Color.White },
+						style: { bgcolor: Color.White, color: Color.Black },
 					},
 				],
 			}
