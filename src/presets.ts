@@ -5,6 +5,12 @@ import { FeedbackId } from './feedbacks.js'
 import * as Color from './colors.js'
 
 export function UpdatePresets(self: ModuleInstance): void {
+	// Don't register presets if no API connection — avoids warnings about missing actions
+	if (!self.api) {
+		self.setPresetDefinitions({})
+		return
+	}
+
 	const presets: CompanionPresetDefinitions = {}
 	const label = self.label
 

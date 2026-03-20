@@ -42,9 +42,16 @@
         "LumiCore"
     ],
     "bonjourQueries": {
-        "luminode_host": {
-            "type": "luminex",
-            "protocol": "tcp"
-        }
+        "luminode_host": [
+            {
+                "type": "_http",
+                "protocol": "tcp",
+                "port": 80
+            },
+            {
+                "type": "luminex",
+                "protocol": "tcp"
+            }
+        ]
     }
 }

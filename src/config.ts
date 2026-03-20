@@ -1,7 +1,7 @@
 import type { SomeCompanionConfigField } from '@companion-module/base'
 
 export interface ModuleConfig {
-	bonjour_host: string
+	luminode_host: string
 	host: string
 	password: string
 	pollInterval: number
