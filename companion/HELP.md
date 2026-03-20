@@ -1,5 +1,8 @@
 # Luminex LumiNode / LumiCore
 
+> Developed by **[PDA Technical Limited](https://pda-tech.com)**
+
+
 This module controls Luminex LumiNode and LumiCore network DMX devices via their REST API and WebSocket interface.
 
 ## Configuration
