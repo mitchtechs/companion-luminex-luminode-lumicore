@@ -1,6 +1,6 @@
 {
     "$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
-    "id": "luminex-luminode-lumicore",
+    "id": "pda-luminex-luminode-lumicore",
     "name": "Luminex LumiNode / LumiCore",
     "shortname": "LumiNode",
     "description": "Control Luminex LumiNode and LumiCore network DMX devices via REST API and WebSocket.",
