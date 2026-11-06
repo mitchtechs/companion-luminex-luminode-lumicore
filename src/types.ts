@@ -1,3 +1,5 @@
+// Shapes from the LumiNode/LumiCore WebApi v2.8.1 (only the fields this module reads)
+
 export interface DeviceInfo {
 	short_name: string
 	long_name: string
@@ -12,51 +14,50 @@ export interface DeviceInfo {
 
 export interface VersionInfo {
 	current: string
-	alternate: string
+	alternate: string | null
 }
 
 export interface Profile {
 	id: number
 	name: string
+	exists: boolean
+}
+
+export interface ActiveProfile {
+	name: string
+	modified: boolean
+}
+
+export interface PlayerData {
+	id: number
+	playing_snapshot_id: string | null
+	next_snapshot_id: string | null
+}
+
+export interface Io {
+	id: number
+	io_class: 'dmx' | 'artnet' | 'sacn' | 'rttrp' | 'kinet' | 'internal' | 'player'
+	name: string
+	port_number?: number
+	universe?: number
+	pb_number?: number
+}
+
+export interface SourceInfo {
+	ip: string
+	name?: string
+	priority?: number | null
+	group?: number | null
 }
 
 export interface ProcessBlock {
 	id: number
 	name: string
 	colors: string[]
-	mode: string
-}
-
-export interface PlayerInfo {
-	playing_snapshot_id: string
-	next_snapshot_id: string
-}
-
-export interface IODevice {
-	id: number
-	io_class: string
-	name: string
-}
-
-export interface WsMessage {
-	op: string
-	path: string
-	value: any
-}
-
-export interface ProcessBlockSource {
-	id: number
-	name: string
-	type: string
-}
-
-export interface ProcessBlockDebug {
-	active_input: number[]
-}
-
-export interface ApiState {
-	deviceinfo?: DeviceInfo
-	active_profile_name?: { name: string }
-	profile?: Profile[]
-	processblock?: ProcessBlock[]
+	mode: 'NONE' | 'REROUTE' | 'LTP' | 'HTP' | 'BACKUP' | 'XFADE' | 'SWITCH' | 'CUSTOM'
+	/** Input slot ("0"-"3") → IO id */
+	inputs?: Record<string, number>
+	sources?: { inputs: Array<SourceInfo | SourceInfo[] | null> }
+	/** Active input slot; only set in SWITCH and BACKUP modes, otherwise null */
+	summarized_active_input?: number | null
 }
