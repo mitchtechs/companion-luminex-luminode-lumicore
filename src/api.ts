@@ -55,6 +55,7 @@ export class LuminexAPI {
 	start(): void {
 		this.stopped = false
 		this.failures = 0
+		this.connected = true
 		this.slowDueAt = 0
 		void this.tick()
 	}
@@ -94,7 +95,7 @@ export class LuminexAPI {
 			if (this.stopped) return
 			this.failures++
 			const status = err instanceof AuthError ? InstanceStatus.BadConfig : InstanceStatus.ConnectionFailure
-			this.setConnected(false, status, err instanceof Error ? err.message : String(err))
+			this.setConnected(false, status, describeError(err))
 			this.schedule(Math.min(this.interval * 2 ** this.failures, MAX_BACKOFF_MS))
 		}
 	}
@@ -279,8 +280,22 @@ export class LuminexAPI {
 			this.deviceInfo = undefined
 			this.slowDueAt = 0
 		}
-		if (was !== connected) this.instance.checkFeedbacks(FeedbackId.DeviceConnected)
+		if (was !== connected) {
+			this.instance.checkFeedbacks(FeedbackId.DeviceConnected)
+			this.instance.log(
+				connected ? 'info' : 'warn',
+				connected ? `Connected to ${this.host}` : `${this.host}: ${message ?? 'disconnected'}`,
+			)
+		}
 	}
 }
 
 class AuthError extends Error {}
+
+/** fetch() reports network problems as "fetch failed"; the useful part is in err.cause */
+function describeError(err: unknown): string {
+	if (!(err instanceof Error)) return String(err)
+	const cause = (err as { cause?: { code?: string; message?: string } }).cause
+	if (err.name === 'TimeoutError') return 'No reply within 3 s'
+	return cause ? `${err.message}: ${cause.code ?? ''} ${cause.message ?? ''}`.trim() : err.message
+}
