@@ -27,6 +27,7 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 		} else {
 			await this.api?.destroy()
 			this.api = undefined
+			this.updateStatus(InstanceStatus.BadConfig, 'Set the device IP')
 			this.initAll()
 		}
 	}
