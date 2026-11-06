@@ -1,56 +1,46 @@
 {
-    "$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
-    "type": "connection",
-    "id": "pda-luminex-luminode-lumicore",
-    "name": "Luminex LumiNode / LumiCore",
-    "shortname": "LumiNode",
-    "description": "Control Luminex LumiNode and LumiCore network DMX devices via REST API and WebSocket.",
-    "version": "1.0.0",
-    "license": "MIT",
-    "repository": "git+https://github.com/bitfocus/companion-module-luminex-luminode-lumicore.git",
-    "bugs": "https://github.com/bitfocus/companion-module-luminex-luminode-lumicore/issues",
-    "maintainers": [
-        {
-            "name": "Mitch Bailey",
-            "email": "mitch@pda-tech.com",
-            "github": "mitchtechs",
-            "url": "https://pda-tech.com"
-        }
-    ],
-    "runtime": {
-        "type": "node22",
-        "api": "nodejs-ipc",
-        "apiVersion": "0.0.0",
-        "entrypoint": "../dist/main.js",
-        "permissions": {
-            "filesystem": true
-        }
-    },
-    "legacyIds": [],
-    "manufacturer": "Luminex",
-    "products": [
-        "LumiNode / LumiCore Status (PDA)"
-    ],
-    "keywords": [
-        "Lighting",
-        "DMX",
-        "Art-Net",
-        "sACN",
-        "Luminex",
-        "LumiNode",
-        "LumiCore"
-    ],
-    "bonjourQueries": {
-        "luminode_host": [
-            {
-                "type": "_http",
-                "protocol": "tcp",
-                "port": 80
-            },
-            {
-                "type": "luminex",
-                "protocol": "tcp"
-            }
-        ]
-    }
+	"$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
+	"type": "connection",
+	"id": "pda-luminex-luminode-lumicore",
+	"name": "Luminex LumiNode / LumiCore",
+	"shortname": "LumiNode",
+	"description": "Control Luminex LumiNode and LumiCore network DMX devices via REST API and WebSocket.",
+	"version": "1.0.0",
+	"license": "MIT",
+	"repository": "git+https://github.com/bitfocus/companion-module-luminex-luminode-lumicore.git",
+	"bugs": "https://github.com/bitfocus/companion-module-luminex-luminode-lumicore/issues",
+	"maintainers": [
+		{
+			"name": "Mitch Bailey",
+			"email": "mitch@pda-tech.com",
+			"github": "mitchtechs",
+			"url": "https://pda-tech.com"
+		}
+	],
+	"runtime": {
+		"type": "node22",
+		"api": "nodejs-ipc",
+		"apiVersion": "0.0.0",
+		"entrypoint": "../dist/main.js",
+		"permissions": {
+			"filesystem": true
+		}
+	},
+	"legacyIds": [],
+	"manufacturer": "Luminex",
+	"products": ["LumiNode / LumiCore Status (PDA)"],
+	"keywords": ["Lighting", "DMX", "Art-Net", "sACN", "Luminex", "LumiNode", "LumiCore"],
+	"bonjourQueries": {
+		"luminode_host": [
+			{
+				"type": "_http",
+				"protocol": "tcp",
+				"port": 80
+			},
+			{
+				"type": "luminex",
+				"protocol": "tcp"
+			}
+		]
+	}
 }

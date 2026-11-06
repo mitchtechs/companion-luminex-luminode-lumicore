@@ -23,7 +23,9 @@ export function GetConfigFields(): SomeCompanionConfigField[] {
 				<strong>Auto-discovery:</strong> If your device appears in the dropdown below, select it for
 				automatic connection. Otherwise enter the IP address manually. Discovery requires the device
 				and this computer to be on the same network with mDNS/Bonjour enabled.
-			`.replace(/\t/g, '').trim(),
+			`
+				.replace(/\t/g, '')
+				.trim(),
 		},
 
 		// ── Auto-discovery ────────────────────────────────────────────────────

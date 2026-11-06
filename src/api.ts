@@ -1,7 +1,16 @@
 import { InstanceStatus, type CompanionVariableValues } from '@companion-module/base'
 import type { ModuleInstance } from './main.js'
 import { FeedbackId } from './feedbacks.js'
-import type { ActiveProfile, DeviceInfo, Io, PlayerData, ProcessBlock, Profile, SourceInfo, VersionInfo } from './types.js'
+import type {
+	ActiveProfile,
+	DeviceInfo,
+	Io,
+	PlayerData,
+	ProcessBlock,
+	Profile,
+	SourceInfo,
+	VersionInfo,
+} from './types.js'
 
 /**
  * Read-only status client for the LumiNode/LumiCore WebApi (v2.8.1, GET requests only).
@@ -159,7 +168,10 @@ export class LuminexAPI {
 		const values: CompanionVariableValues = {}
 		blocks.forEach((pb, i) => {
 			const n = i + 1
-			const slot = typeof pb.summarized_active_input === 'number' && pb.summarized_active_input < 4 ? pb.summarized_active_input : null
+			const slot =
+				typeof pb.summarized_active_input === 'number' && pb.summarized_active_input < 4
+					? pb.summarized_active_input
+					: null
 			this.activeSlots.set(i, slot)
 			values[`processblock_${n}_name`] = pb.name
 			values[`processblock_${n}_mode`] = pb.mode
