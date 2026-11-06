@@ -25,26 +25,26 @@ export function UpdateVariableDefinitions(self: ModuleInstance): void {
 
 		// Active Profile
 		{ variableId: 'active_profile_name', name: 'Active Profile Name' },
+		{ variableId: 'active_profile_modified', name: 'Active Profile Modified (yes/no)' },
 	]
 
 	// Profile names (40 slots)
 	for (let i = 1; i <= 40; i++) {
-		variables.push({
-			variableId: `profile_${i}_name`,
-			name: `Profile ${i} Name`,
-		})
+		variables.push({ variableId: `profile_${i}_name`, name: `Profile ${i} Name` })
 	}
 
-	// Process block variables
-	const numPB = self.api?.deviceInfo?.nr_processblocks ?? 8
+	// Process engines
+	const numPB = self.api?.processblocks.length || self.api?.deviceInfo?.nr_processblocks || 8
 	for (let i = 1; i <= numPB; i++) {
 		variables.push(
 			{ variableId: `processblock_${i}_name`, name: `Process Engine ${i} Name` },
 			{ variableId: `processblock_${i}_color_1`, name: `Process Engine ${i} Color 1` },
 			{ variableId: `processblock_${i}_color_2`, name: `Process Engine ${i} Color 2` },
 			{ variableId: `processblock_${i}_mode`, name: `Process Engine ${i} Mode` },
+			{ variableId: `processblock_${i}_inputs`, name: `Process Engine ${i} Inputs` },
+			{ variableId: `processblock_${i}_active_slot`, name: `Process Engine ${i} Active Input Number (Switch/Backup)` },
 			{ variableId: `processblock_${i}_active_input`, name: `Process Engine ${i} Active Input` },
-			{ variableId: `processblock_${i}_sources`, name: `Process Engine ${i} Available Sources` },
+			{ variableId: `processblock_${i}_active_source`, name: `Process Engine ${i} Active Source (sender)` },
 		)
 	}
 

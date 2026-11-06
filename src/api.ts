@@ -1,30 +1,38 @@
 import { InstanceStatus, type CompanionVariableValues } from '@companion-module/base'
 import type { ModuleInstance } from './main.js'
-import { LuminexWebSocket } from './websocket.js'
 import { FeedbackId } from './feedbacks.js'
-import type { DeviceInfo, ProcessBlock, ProcessBlockSource, ProcessBlockDebug, Profile, WsMessage, ApiState } from './types.js'
+import type { ActiveProfile, DeviceInfo, Io, PlayerData, ProcessBlock, Profile, SourceInfo, VersionInfo } from './types.js'
+
+/**
+ * Read-only status client for the LumiNode/LumiCore WebApi (v2.8.1, GET requests only).
+ * One request at a time with a timeout; when the device stops answering the gap between
+ * tries grows to 30 s, and it recovers on its own when the device comes back.
+ */
+const REQUEST_TIMEOUT_MS = 3000
+const SLOW_REFRESH_MS = 30000
+const MAX_BACKOFF_MS = 30000
 
 export class LuminexAPI {
 	private instance: ModuleInstance
 	private host = ''
 	private password = ''
-	private ws?: LuminexWebSocket
-	private pollTimer?: ReturnType<typeof setInterval>
-	private longPollTimer?: ReturnType<typeof setInterval>
+	private timer?: ReturnType<typeof setTimeout>
+	private abort?: AbortController
+	private stopped = true
+	private failures = 0
+	private slowDueAt = 0
+	private lastValues: CompanionVariableValues = {}
 
 	connected = false
-	useWebSockets = false
-
-	mainPlayerIdx = -1
+	deviceInfo?: DeviceInfo
+	activeProfile?: string
 	currentSnapshot = '-'
 	nextSnapshot = '-'
-	activeProfile?: string
-	profiles: Profile[] = []
 	processblocks: ProcessBlock[] = []
-	processblockSources: Map<number, ProcessBlockSource[]> = new Map()
-	activeInputs: Map<number, string> = new Map()
-	deviceInfo?: DeviceInfo
-	firmwareVersion?: string
+	/** Active input slot (0-3) per process engine, only for SWITCH/BACKUP modes */
+	activeSlots: Map<number, number | null> = new Map()
+	private ios: Map<number, Io> = new Map()
+	private playerId: number | null = null
 
 	constructor(instance: ModuleInstance) {
 		this.instance = instance
@@ -35,371 +43,232 @@ export class LuminexAPI {
 		this.password = password
 	}
 
+	start(): void {
+		this.stopped = false
+		this.failures = 0
+		this.slowDueAt = 0
+		void this.tick()
+	}
+
 	async destroy(): Promise<void> {
-		this.stopPolling()
-		this.ws?.close()
-		this.ws = undefined
-		this.updateStatus(InstanceStatus.Disconnected)
+		this.stopped = true
+		if (this.timer) clearTimeout(this.timer)
+		this.timer = undefined
+		this.abort?.abort()
+		this.setConnected(false)
 	}
 
-	// --- Connection ---
+	private get interval(): number {
+		return Math.max(1000, Number(this.instance.config?.pollInterval) || 2000)
+	}
 
-	async connect(): Promise<void> {
-		this.stopPolling()
+	private schedule(ms: number): void {
+		if (this.stopped) return
+		this.timer = setTimeout(() => void this.tick(), ms)
+	}
 
+	private async tick(): Promise<void> {
+		this.timer = undefined
+		if (this.stopped) return
 		try {
-			const data = await this.fetchJSON<{ current: string; alternate: string }>('software/version')
-			if (!data) return
-
-			this.firmwareVersion = data.current
-			this.instance.setVariableValues({
-				current_version: data.current,
-				alternate_version: data.alternate,
-			})
-
-			this.useWebSockets = this.supportsWebSocket(data.current)
-			this.log('debug', `WebSocket support: ${this.useWebSockets}`)
-			this.updateStatus(InstanceStatus.Ok)
-
-			if (this.useWebSockets) {
-				this.initWebSocket()
+			if (!this.deviceInfo) await this.loadDevice()
+			if (Date.now() >= this.slowDueAt) {
+				await this.loadSlow()
+				this.slowDueAt = Date.now() + SLOW_REFRESH_MS
 			}
-
-			this.startPolling()
-		} catch {
-			this.updateStatus(InstanceStatus.ConnectionFailure)
+			await this.loadProcessBlocks()
+			await this.loadPlayer()
+			this.failures = 0
+			this.setConnected(true)
+			this.schedule(this.interval)
+		} catch (err) {
+			if (this.stopped) return
+			this.failures++
+			const status = err instanceof AuthError ? InstanceStatus.BadConfig : InstanceStatus.ConnectionFailure
+			this.setConnected(false, status, err instanceof Error ? err.message : String(err))
+			this.schedule(Math.min(this.interval * 2 ** this.failures, MAX_BACKOFF_MS))
 		}
 	}
 
-	private supportsWebSocket(version: string): boolean {
-		if (!version) return false
-		const m = version.match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/)
-		if (!m) return true // assume custom firmware supports it
-		const major = parseInt(m[1] ?? '0', 10)
-		const minor = parseInt(m[2] ?? '0', 10)
-		if (isNaN(major) || isNaN(minor)) return false
-		return major > 2 || (major === 2 && minor >= 7)
-	}
+	// --- REST (GET only) ---
 
-	// --- WebSocket ---
-
-	private initWebSocket(): void {
-		this.ws?.close()
-		this.ws = new LuminexWebSocket(this.host, {
-			onopen: () => {
-				this.updateStatus(InstanceStatus.Ok)
-				this.log('debug', `WebSocket connected to ${this.host}`)
-			},
-			onmessage: (data) => this.handleWsMessage(data as WsMessage),
-			onerror: (msg) => this.log('error', `WebSocket error: ${msg}`),
-			ondisconnect: (msg) => {
-				this.log('debug', `WebSocket disconnected: ${msg}`)
-				this.updateStatus(InstanceStatus.Disconnected, msg)
-			},
+	private async get<T>(path: string): Promise<T> {
+		this.abort = new AbortController()
+		const headers: Record<string, string> = { Accept: 'application/json' }
+		if (this.password) headers.Authorization = `Basic ${Buffer.from('admin:' + this.password).toString('base64')}`
+		const res = await fetch(`http://${this.host}/api/${path}`, {
+			headers,
+			signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]),
 		})
-		this.ws.init()
+		if (res.status === 401) throw new AuthError('Wrong password (401)')
+		if (!res.ok) throw new Error(`GET /api/${path} returned ${res.status}`)
+		return (await res.json()) as T
 	}
 
-	private handleWsMessage(msg: WsMessage): void {
-		if (!msg?.op || !msg?.path) return
+	// --- Loaders ---
 
-		if (msg.path === '/api') {
-			const state = msg.value as ApiState
-			if (state.deviceinfo) this.processDeviceInfo(state.deviceinfo)
-			if (state.active_profile_name) this.processActiveProfile(state.active_profile_name)
-			if (state.profile) this.processProfiles(state.profile)
-			if (state.processblock) this.processProcessBlocks(state.processblock)
+	/** Once per connection: firmware and device identity */
+	private async loadDevice(): Promise<void> {
+		const version = await this.get<VersionInfo>('software/version')
+		const info = await this.get<DeviceInfo>('deviceinfo')
+		this.deviceInfo = info
+		this.setValues({
+			current_version: version.current,
+			alternate_version: version.alternate ?? '',
+			short_name: info.short_name,
+			long_name: info.long_name,
+			device_id: info.ID,
+			color_1: info.colors?.[0] ?? '',
+			color_2: info.colors?.[1] ?? '',
+			nr_dmx_ports: info.nr_dmx_ports,
+			nr_processblocks: info.nr_processblocks,
+			serial: info.serial,
+			mac_address: info.mac_address,
+			device_type: info.type,
+		})
+		this.instance.initVariables()
+		this.instance.initPresets()
+	}
+
+	/** Every 30 s: IO names, profiles and the playback player (these rarely change) */
+	private async loadSlow(): Promise<void> {
+		const ios = await this.get<Io[]>('IO')
+		this.ios = new Map(ios.filter((io) => typeof io.id === 'number' && io.id >= 0).map((io) => [io.id, io]))
+		const player = ios.find((io) => io.io_class === 'player')
+		this.playerId = player ? player.id : null
+
+		const profiles = await this.get<Profile[]>('profile')
+		const values: CompanionVariableValues = {}
+		for (const p of profiles) {
+			if (p.id >= 0 && p.id < 40) values[`profile_${p.id + 1}_name`] = p.exists ? p.name : ''
+		}
+		const active = await this.get<ActiveProfile>('active_profile_name')
+		this.activeProfile = active.name
+		values.active_profile_name = active.name
+		values.active_profile_modified = active.modified ? 'yes' : 'no'
+		this.setValues(values)
+		this.instance.checkFeedbacks(FeedbackId.ActiveProfile)
+	}
+
+	/** Every poll: one request returns every process engine with its mode and active input */
+	private async loadProcessBlocks(): Promise<void> {
+		const blocks = await this.get<ProcessBlock[]>('processblock')
+		const countChanged = blocks.length !== this.processblocks.length
+		this.processblocks = blocks
+
+		const values: CompanionVariableValues = {}
+		blocks.forEach((pb, i) => {
+			const n = i + 1
+			const slot = typeof pb.summarized_active_input === 'number' && pb.summarized_active_input < 4 ? pb.summarized_active_input : null
+			this.activeSlots.set(i, slot)
+			values[`processblock_${n}_name`] = pb.name
+			values[`processblock_${n}_mode`] = pb.mode
+			values[`processblock_${n}_color_1`] = pb.colors?.[0] ?? ''
+			values[`processblock_${n}_color_2`] = pb.colors?.[1] ?? ''
+			values[`processblock_${n}_inputs`] = [0, 1, 2, 3]
+				.filter((s) => pb.inputs?.[String(s)] !== undefined)
+				.map((s) => `${s + 1}: ${this.inputName(pb, s)}`)
+				.join(', ')
+			values[`processblock_${n}_active_slot`] = slot === null ? '' : slot + 1
+			values[`processblock_${n}_active_input`] = slot === null ? this.mergeLabel(pb.mode) : this.inputName(pb, slot)
+			values[`processblock_${n}_active_source`] = slot === null ? '' : this.sourceLabel(pb.sources?.inputs?.[slot])
+		})
+
+		if (countChanged) {
 			this.instance.initVariables()
-		} else if (msg.path === '/api/deviceinfo') {
-			this.processDeviceInfo(msg.value)
-		} else if (msg.path === '/api/active_profile_name') {
-			this.processActiveProfile(msg.value)
-		} else if (msg.path.startsWith('/api/profile/') && msg.op === 'replace') {
-			const id = parseInt(msg.path.replace('/api/profile/', ''), 10)
-			this.updateSingleProfile(id, msg.value)
-		} else if (/^\/api\/processblock\/\d+$/.test(msg.path) && msg.op === 'replace') {
-			const id = parseInt(msg.path.replace('/api/processblock/', ''), 10)
-			this.updateSingleProcessBlock(id, msg.value)
+			this.instance.initPresets()
+		}
+		if (this.setValues(values)) {
+			this.instance.checkFeedbacks(FeedbackId.ActiveInput, FeedbackId.ProcessBlockMode)
 		}
 	}
 
-	// --- Polling ---
-
-	private startPolling(): void {
-		this.stopPolling()
-		const interval = this.instance.config?.pollInterval ?? 5000
-
-		if (!this.useWebSockets) {
-			this.fetchDeviceInfo()
-			this.fetchProfileNames()
-			this.fetchProcessBlocks()
+	private async loadPlayer(): Promise<void> {
+		let playing = '-'
+		let next = '-'
+		if (this.playerId !== null) {
+			const data = await this.get<PlayerData>(`play/player/${this.playerId}`)
+			playing = data.playing_snapshot_id ?? '-'
+			next = data.next_snapshot_id ?? '-'
 		}
-		this.fetchPlayInfo()
-
-		this.fetchProcessBlockInputs()
-
-		this.pollTimer = setInterval(() => {
-			if (!this.useWebSockets) {
-				this.fetchDeviceInfo()
-			}
-			this.fetchPlayInfo()
-			this.fetchProcessBlockInputs()
-		}, interval)
-
-		if (!this.useWebSockets) {
-			this.longPollTimer = setInterval(() => {
-				this.fetchProfileNames()
-				this.fetchProcessBlocks()
-			}, 15000)
-		}
-	}
-
-	private stopPolling(): void {
-		if (this.pollTimer) {
-			clearInterval(this.pollTimer)
-			this.pollTimer = undefined
-		}
-		if (this.longPollTimer) {
-			clearInterval(this.longPollTimer)
-			this.longPollTimer = undefined
-		}
-	}
-
-	// --- REST API ---
-
-	private getHeaders(): Headers {
-		const headers = new Headers()
-		headers.set('Content-Type', 'application/json')
-		if (this.password) {
-			headers.set('Authorization', `Basic ${Buffer.from('admin:' + this.password).toString('base64')}`)
-		}
-		return headers
-	}
-
-	private async fetchJSON<T>(endpoint: string): Promise<T | null> {
-		try {
-			const res = await fetch(`http://${this.host}/api/${endpoint}`, {
-				headers: this.getHeaders(),
-			})
-			if (!res.ok) {
-				this.log('debug', `GET ${endpoint} returned ${res.status}`)
-				return null
-			}
-			const contentType = res.headers.get('content-type')
-			if (contentType?.includes('application/json')) {
-				return (await res.json()) as T
-			}
-			return null
-		} catch (err) {
-			this.log('debug', `GET ${endpoint} failed: ${err}`)
-			return null
-		}
-	}
-
-	async sendCommand(endpoint: string, method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', body?: unknown): Promise<void> {
-		try {
-			const res = await fetch(`http://${this.host}/api/${endpoint}`, {
-				method,
-				headers: this.getHeaders(),
-				body: body !== undefined ? JSON.stringify(body) : undefined,
-			})
-			if (!res.ok) {
-				this.log('warn', `${method} ${endpoint} returned ${res.status}`)
-			}
-		} catch (err) {
-			this.log('warn', `${method} ${endpoint} failed: ${err}`)
-		}
-	}
-
-	// --- Data Fetching ---
-
-	private async fetchDeviceInfo(): Promise<void> {
-		const data = await this.fetchJSON<DeviceInfo>('deviceinfo')
-		if (data) this.processDeviceInfo(data)
-	}
-
-	private async fetchProfileNames(): Promise<void> {
-		const [activeData, profileData] = await Promise.all([
-			this.fetchJSON<{ name: string }>('active_profile_name'),
-			this.fetchJSON<Profile[]>('profile'),
-		])
-		if (activeData) this.processActiveProfile(activeData)
-		if (profileData) this.processProfiles(profileData)
-	}
-
-	private async fetchProcessBlocks(): Promise<void> {
-		const data = await this.fetchJSON<ProcessBlock[]>('processblock')
-		if (data) this.processProcessBlocks(data)
-	}
-
-	private async fetchProcessBlockInputs(): Promise<void> {
-		const numPB = this.deviceInfo?.nr_processblocks ?? 0
-		for (let i = 0; i < numPB; i++) {
-			const [sources, debug] = await Promise.all([
-				this.fetchJSON<ProcessBlockSource[]>(`pipeline/processblock/${i}/sources`),
-				this.fetchJSON<ProcessBlockDebug>(`pipeline/processblock/${i}/debug`),
-			])
-
-			if (sources) {
-				this.processblockSources.set(i, sources)
-			}
-
-			if (debug && sources) {
-				this.processActiveInput(i, sources, debug)
-			}
-		}
-	}
-
-	private async fetchPlayInfo(): Promise<void> {
-		const players = await this.fetchJSON<Array<{ id: number }>>('IO?io_class=player')
-		if (!players || players.length === 0) {
-			this.mainPlayerIdx = -1
-			this.currentSnapshot = '-'
-			this.nextSnapshot = '-'
-			this.instance.setVariableValues({
-				current_snapshot: '-',
-				next_snapshot: '-',
-			})
+		this.currentSnapshot = playing
+		this.nextSnapshot = next
+		if (this.setValues({ current_snapshot: playing, next_snapshot: next })) {
 			this.instance.checkFeedbacks(FeedbackId.PlayingCue, FeedbackId.NextCue)
-			return
-		}
-
-		this.mainPlayerIdx = players[0].id
-
-		const playerData = await this.fetchJSON<{ playing_snapshot_id: string; next_snapshot_id: string }>(
-			`play/player/${this.mainPlayerIdx}`,
-		)
-		if (playerData) {
-			this.currentSnapshot = playerData.playing_snapshot_id
-			this.nextSnapshot = playerData.next_snapshot_id
-			this.instance.setVariableValues({
-				current_snapshot: playerData.playing_snapshot_id,
-				next_snapshot: playerData.next_snapshot_id,
-			})
-			this.instance.checkFeedbacks(FeedbackId.PlayingCue, FeedbackId.NextCue)
-		}
-	}
-
-	// --- Data Processing ---
-
-	private processDeviceInfo(data: DeviceInfo): void {
-		this.deviceInfo = data
-		this.instance.setVariableValues({
-			short_name: data.short_name,
-			long_name: data.long_name,
-			device_id: data.ID,
-			color_1: data.colors?.[0] ?? '',
-			color_2: data.colors?.[1] ?? '',
-			nr_dmx_ports: data.nr_dmx_ports,
-			nr_processblocks: data.nr_processblocks,
-			serial: data.serial,
-			mac_address: data.mac_address,
-			device_type: data.type,
-		})
-	}
-
-	private processActiveProfile(data: { name: string }): void {
-		if (this.activeProfile !== data.name) {
-			this.activeProfile = data.name
-			this.instance.setVariableValues({ active_profile_name: data.name })
-			this.instance.checkFeedbacks(FeedbackId.ActiveProfile)
-		}
-	}
-
-	private processProfiles(data: Profile[]): void {
-		if (!Array.isArray(data)) return
-		const vars: CompanionVariableValues = {}
-		for (const profile of data) {
-			const displayId = profile.id + 1
-			const old = this.profiles.find((p) => p.id === profile.id)
-			if (!old || old.name !== profile.name) {
-				vars[`profile_${displayId}_name`] = profile.name
-			}
-		}
-		this.profiles = data
-		this.instance.setVariableValues(vars)
-		this.instance.checkFeedbacks(FeedbackId.ActiveProfile)
-	}
-
-	private processProcessBlocks(data: ProcessBlock[]): void {
-		if (!Array.isArray(data)) return
-		const vars: CompanionVariableValues = {}
-		for (const pb of data) {
-			const displayId = pb.id + 1
-			const old = this.processblocks.find((p) => p.id === pb.id)
-			if (!old || old.name !== pb.name) {
-				vars[`processblock_${displayId}_name`] = pb.name
-			}
-			if (!old || JSON.stringify(old.colors) !== JSON.stringify(pb.colors)) {
-				vars[`processblock_${displayId}_color_1`] = pb.colors?.[0] ?? ''
-				vars[`processblock_${displayId}_color_2`] = pb.colors?.[1] ?? ''
-			}
-			if (!old || old.mode !== pb.mode) {
-				vars[`processblock_${displayId}_mode`] = pb.mode
-			}
-		}
-		this.processblocks = data
-		this.instance.setVariableValues(vars)
-		this.instance.checkFeedbacks(FeedbackId.ProcessBlockMode)
-	}
-
-	private updateSingleProfile(id: number, profile: { name: string }): void {
-		const displayId = id + 1
-		const old = this.profiles.find((p) => p.id === id)
-		if (!old || old.name !== profile.name) {
-			this.instance.setVariableValues({ [`profile_${displayId}_name`]: profile.name })
-		}
-		this.profiles[id] = { id, name: profile.name }
-		this.instance.checkFeedbacks(FeedbackId.ActiveProfile)
-	}
-
-	private updateSingleProcessBlock(id: number, pb: ProcessBlock): void {
-		const displayId = id + 1
-		const vars: CompanionVariableValues = {}
-		const old = this.processblocks.find((p) => p.id === id)
-		if (!old || old.name !== pb.name) vars[`processblock_${displayId}_name`] = pb.name
-		if (!old || JSON.stringify(old.colors) !== JSON.stringify(pb.colors)) {
-			vars[`processblock_${displayId}_color_1`] = pb.colors?.[0] ?? ''
-			vars[`processblock_${displayId}_color_2`] = pb.colors?.[1] ?? ''
-		}
-		if (!old || old.mode !== pb.mode) vars[`processblock_${displayId}_mode`] = pb.mode
-		this.processblocks[id] = pb
-		this.instance.setVariableValues(vars)
-		this.instance.checkFeedbacks(FeedbackId.ProcessBlockMode)
-	}
-
-	private processActiveInput(pbIdx: number, sources: ProcessBlockSource[], debug: ProcessBlockDebug): void {
-		const displayId = pbIdx + 1
-		// active_input is an array of source IDs per channel - use the first channel as the representative
-		const activeSourceId = debug.active_input?.[0]
-		const activeSource = activeSourceId !== undefined ? sources.find((s) => s.id === activeSourceId) : undefined
-		const activeName = activeSource?.name ?? (activeSourceId !== undefined ? `Source ${activeSourceId}` : 'None')
-
-		const previousName = this.activeInputs.get(pbIdx)
-		if (previousName !== activeName) {
-			this.activeInputs.set(pbIdx, activeName)
-			this.instance.setVariableValues({
-				[`processblock_${displayId}_active_input`]: activeName,
-			})
-
-			// Also store available sources as a comma-separated list
-			const sourceNames = sources.map((s) => s.name).join(', ')
-			this.instance.setVariableValues({
-				[`processblock_${displayId}_sources`]: sourceNames,
-			})
-
-			this.instance.checkFeedbacks(FeedbackId.ActiveInput)
 		}
 	}
 
 	// --- Helpers ---
 
-	private updateStatus(status: InstanceStatus, msg?: string | null): void {
-		this.connected = status === InstanceStatus.Ok
-		this.instance.updateStatus(status, msg ?? undefined)
+	/** Name of the IO patched to an input slot: its own name, else a description, else "Input n" */
+	private inputName(pb: ProcessBlock, slot: number): string {
+		const ioId = pb.inputs?.[String(slot)]
+		const io = ioId === undefined ? undefined : this.ios.get(ioId)
+		if (!io) return `Input ${slot + 1}`
+		if (io.name) return io.name
+		switch (io.io_class) {
+			case 'dmx':
+				return `DMX ${io.port_number ?? ''}`.trim()
+			case 'artnet':
+				return `Art-Net ${io.universe ?? ''}`.trim()
+			case 'sacn':
+				return `sACN ${io.universe ?? ''}`.trim()
+			case 'kinet':
+				return `KiNET ${io.universe ?? ''}`.trim()
+			case 'rttrp':
+				return `RTTrP ${io.universe ?? ''}`.trim()
+			case 'internal':
+				return `PE ${(io.pb_number ?? 0) + 1}`
+			default:
+				return `Input ${slot + 1}`
+		}
 	}
 
-	private log(level: 'debug' | 'info' | 'warn' | 'error', message: string): void {
-		this.instance.log(level, message)
+	/** Who is sending to the active input (console name and/or IP), when the device reports it */
+	private sourceLabel(src: SourceInfo | SourceInfo[] | null | undefined): string {
+		if (!src) return ''
+		const list = Array.isArray(src) ? src : [src]
+		return list.map((s) => (s.name ? `${s.name} (${s.ip})` : s.ip)).join(', ')
+	}
+
+	private mergeLabel(mode: string): string {
+		switch (mode) {
+			case 'HTP':
+			case 'LTP':
+				return `Merge (${mode})`
+			case 'XFADE':
+				return 'Crossfade'
+			case 'CUSTOM':
+				return 'Custom merge'
+			case 'REROUTE':
+				return 'Reroute'
+			default:
+				return '-'
+		}
+	}
+
+	/** Sets only the variables that changed; returns true if anything did */
+	private setValues(values: CompanionVariableValues): boolean {
+		const changed: CompanionVariableValues = {}
+		for (const [k, v] of Object.entries(values)) {
+			if (this.lastValues[k] !== v) changed[k] = v
+		}
+		if (Object.keys(changed).length === 0) return false
+		Object.assign(this.lastValues, changed)
+		this.instance.setVariableValues(changed)
+		return true
+	}
+
+	private setConnected(connected: boolean, status?: InstanceStatus, message?: string): void {
+		const was = this.connected
+		this.connected = connected
+		this.instance.updateStatus(connected ? InstanceStatus.Ok : (status ?? InstanceStatus.Disconnected), message)
+		if (!connected) {
+			this.deviceInfo = undefined
+			this.slowDueAt = 0
+		}
+		if (was !== connected) this.instance.checkFeedbacks(FeedbackId.DeviceConnected)
 	}
 }
+
+class AuthError extends Error {}

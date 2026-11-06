@@ -1,6 +1,5 @@
 import { InstanceBase, InstanceStatus, runEntrypoint, type SomeCompanionConfigField } from '@companion-module/base'
 import { type ModuleConfig, GetConfigFields } from './config.js'
-import { UpdateActions } from './actions.js'
 import { UpdateFeedbacks } from './feedbacks.js'
 import { UpdatePresets } from './presets.js'
 import { UpdateVariableDefinitions } from './variables.js'
@@ -24,7 +23,7 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 			this.updateStatus(InstanceStatus.Connecting)
 			this.api.setConfig(host, config.password ?? '')
 			this.initAll()
-			await this.api.connect()
+			this.api.start()
 		} else {
 			await this.api?.destroy()
 			this.api = undefined
@@ -63,7 +62,8 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 	}
 
 	initActions(): void {
-		UpdateActions(this)
+		// Read-only status module: no actions
+		this.setActionDefinitions({})
 	}
 
 	initPresets(): void {
